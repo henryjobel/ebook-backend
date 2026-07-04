@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 
-import { connectDb } from "./db.js";
+import { connectDb, getDbStatus } from "./db.js";
 import { getSettings } from "./models/Settings.js";
 import { Product } from "./models/Product.js";
 import { Order } from "./models/Order.js";
@@ -18,12 +18,22 @@ dotenv.config();
 const app = express();
 const port = Number(process.env.PORT || 5000);
 const jwtSecret = process.env.JWT_SECRET || "dev-secret";
-const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-const allowedOrigins = String(process.env.CLIENT_URL || "")
+const isProduction = process.env.NODE_ENV === "production";
+const backendUrl = process.env.BACKEND_URL || (isProduction ? "https://learnaiwithsadhin.xyz" : `http://localhost:${port}`);
+const configuredAllowedOrigins = String(process.env.CLIENT_URL || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const frontendUrl = process.env.FRONTEND_URL || allowedOrigins[0] || "http://localhost:5173";
+const allowedOrigins = [...new Set([
+  ...configuredAllowedOrigins,
+  "https://learnaiwithsadhin.xyz",
+  "https://www.learnaiwithsadhin.xyz",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000"
+])];
+const frontendUrl = process.env.FRONTEND_URL || "https://learnaiwithsadhin.xyz";
 const uddoktaPayBaseUrl = String(process.env.UDDOKTAPAY_BASE_URL || "").replace(/\/+$/, "");
 const uddoktaPayApiKey = process.env.UDDOKTAPAY_API_KEY || "";
 
@@ -219,7 +229,59 @@ function readBoolean(value) {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+  const db = getDbStatus();
+  res.json({ ok: true, db: db.label, dbConnected: db.connected, time: new Date().toISOString() });
+});
+
+app.get("/", (_req, res) => {
+  const db = getDbStatus();
+  const statusDot = (ok) => `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ok ? "#22c55e" : "#ef4444"};margin-right:8px"></span>`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ebook Backend Status</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 40px 20px; }
+  .card { max-width: 560px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 28px 32px; box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+  h1 { font-size: 20px; margin: 0 0 20px; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #334155; }
+  .row:last-child { border-bottom: none; }
+  .label { color: #94a3b8; font-size: 14px; }
+  .value { font-size: 14px; font-weight: 600; }
+  code { background: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  ul { padding-left: 18px; margin: 8px 0 0; font-size: 13px; color: #94a3b8; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>📦 Ebook Backend Status</h1>
+    <div class="row">
+      <span class="label">API</span>
+      <span class="value">${statusDot(true)}Live</span>
+    </div>
+    <div class="row">
+      <span class="label">Database (MongoDB)</span>
+      <span class="value">${statusDot(db.connected)}${db.label}</span>
+    </div>
+    <div class="row">
+      <span class="label">Server time</span>
+      <span class="value">${new Date().toLocaleString()}</span>
+    </div>
+    <div class="row" style="border-bottom:none; flex-direction: column; align-items: flex-start;">
+      <span class="label" style="margin-bottom:6px">Quick check</span>
+      <ul>
+        <li><code>/api/health</code> — JSON status (api + db)</li>
+        <li><code>/api/ebook</code> — public ebook data</li>
+        <li><code>/api/products</code> — active products</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>`);
 });
 
 app.get("/api/ebook", async (_req, res) => {
