@@ -19,7 +19,8 @@ const app = express();
 const port = Number(process.env.PORT || 5000);
 const jwtSecret = process.env.JWT_SECRET || "dev-secret";
 const isProduction = process.env.NODE_ENV === "production";
-const backendUrl = process.env.BACKEND_URL || (isProduction ? "https://learnaiwithsadhin.xyz" : `http://localhost:${port}`);
+const defaultProductionBackendUrl = "https://ebook-backend-one.vercel.app";
+const backendUrl = process.env.BACKEND_URL || (isProduction ? defaultProductionBackendUrl : `http://localhost:${port}`);
 const configuredAllowedOrigins = String(process.env.CLIENT_URL || "")
   .split(",")
   .map((origin) => origin.trim())
@@ -734,7 +735,6 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
 
   if (status === "approved" && !wasAlreadyApproved && order.email) {
     const settings = await getSettings();
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
     const downloadUrl = `${backendUrl}/api/download/${order.downloadToken}`;
     sendEbookDeliveryEmail({
       to: order.email,
