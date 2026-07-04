@@ -1,0 +1,232 @@
+{
+  "ebook": {
+    "title": "বাংলা ইবুক",
+    "subtitle": "আপনার জ্ঞান, এক জায়গায় সুন্দরভাবে সাজানো",
+    "description": "এই ইবুকে ধাপে ধাপে শেখার মতো করে গুরুত্বপূর্ণ বিষয়গুলো সাজানো হয়েছে। পেমেন্ট করার পর এডমিন অনুমোদন দিলে ডাউনলোড লিংক পাওয়া যাবে।",
+    "price": 499,
+    "coverUrl": "/uploads/1781592890496-_mpimage--2-.webp",
+    "fileName": "1781592900562-1761582079030.pdf",
+    "originalFileName": "1761582079030.pdf"
+  },
+  "payment": {
+    "bkashNumber": "01XXXXXXXXX",
+    "nagadNumber": "01XXXXXXXXX",
+    "instructions": "Send Money করুন, তারপর আপনার Transaction ID দিয়ে অর্ডার সাবমিট করুন।"
+  },
+  "orders": [
+    {
+      "deliveryStatus": "not_required",
+      "trackingNumber": "",
+      "deliveryNote": "",
+      "id": "ee071551-da09-4ab9-9c50-ebcaf5a85ac1",
+      "name": "henry",
+      "phone": "0197897584",
+      "email": "jhobknk#gmail.com",
+      "method": "bkash",
+      "transactionId": "hgfghfgfiyug",
+      "amount": 499,
+      "orderBump": false,
+      "status": "approved",
+      "createdAt": "2026-06-16T09:43:49.383Z",
+      "downloadToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvcmRlcklkIjoiZWUwNzE1NTEtZGEwOS00YWI5LTljNTAtZWJjYWY1YTg1YWMxIiwicHVycG9zZSI6ImRvd25sb2FkIiwiaWF0IjoxNzgxNjAzMDU5LCJleHAiOjE3ODIyMDc4NTl9.Z34ZuXJBqB46trpEX04GtCrshY0bBZpWy6nOihgiPS0",
+      "updatedAt": "2026-06-16T09:44:19.119Z"
+    },
+    {
+      "deliveryStatus": "not_required",
+      "trackingNumber": "",
+      "deliveryNote": "",
+      "id": "0b109462-b808-43f4-8624-d86360a1a394",
+      "name": "henry",
+      "phone": "01975975584",
+      "email": "jhobelsaha@gmail.com",
+      "method": "bkash",
+      "transactionId": "sdwaswdaweaq3e",
+      "amount": 499,
+      "orderBump": false,
+      "status": "approved",
+      "createdAt": "2026-06-16T09:03:45.571Z",
+      "downloadToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvcmRlcklkIjoiMGIxMDk0NjItYjgwOC00M2Y0LTg2MjQtZDg2MzYwYTFhMzk0IiwicHVycG9zZSI6ImRvd25sb2FkIiwiaWF0IjoxNzgxNjAyMzc0LCJleHAiOjE3ODIyMDcxNzR9.jN9KUveiPYJreQePatAXkumNLtwVsh_rt_5slVohFYs",
+      "updatedAt": "2026-06-16T09:32:54.177Z"
+    },
+    {
+      "deliveryStatus": "not_required",
+      "trackingNumber": "",
+      "deliveryNote": "",
+      "id": "146375e6-5eb9-40c6-9de3-1ff568ffc9b1",
+      "name": "asdsdas",
+      "phone": "0197858454155",
+      "email": "as@gmail.com",
+      "method": "bkash",
+      "transactionId": "asdasdwgasdvasdf",
+      "amount": 499,
+      "status": "approved",
+      "createdAt": "2026-06-16T06:54:10.064Z",
+      "downloadToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvcmRlcklkIjoiMTQ2Mzc1ZTYtNWViOS00MGM2LTlkZTMtMWZmNTY4ZmZjOWIxIiwicHVycG9zZSI6ImRvd25sb2FkIiwiaWF0IjoxNzgxNTk2NTg3LCJleHAiOjE3ODIyMDEzODd9.e7WbSmO7qBNhLS0iGcswQqzOvDiKWjO54u5jjv88vBY",
+      "updatedAt": "2026-06-16T07:56:27.524Z"
+    }
+  ],
+  "content": {
+    "logoUrl": "/uploads/1781605058561-ChatGPT-Image-Jun-16--2026--01_34_12-PM.png",
+    "heroBannerUrl": "",
+    "authorPhotoUrl": "",
+    "guaranteeBadgeUrl": "",
+    "videoReviewUrl": "",
+    "brandName": "Learn Ai with Sadhin",
+    "trustLine": "৩,৫০০+ মানুষ ইতোমধ্যে পড়েছেন ⭐⭐⭐⭐⭐",
+    "stickyCta": "এখনই নাও",
+    "heroKicker": "Limited Time Bangla eBook",
+    "heroHeadline": "এলোমেলো শেখা বন্ধ করে এবার clear roadmap হাতে নাও",
+    "heroSubheadline": "সহজ বাংলায় সাজানো practical guide, যাতে তুমি বুঝে বুঝে শুরু করতে পারো এবং দ্রুত action নিতে পারো।",
+    "heroCta": "এখনই ডাউনলোড করুন",
+    "whoForTitle": "এই বইটা তোমার জন্য যদি...",
+    "whoFor": [
+      "তুমি যদি অনেক কিছু শুরু করেও শেষ করতে না পারো",
+      "তুমি যদি সহজ বাংলায় step-by-step গাইড চাও",
+      "তুমি যদি কোথা থেকে শুরু করবে বুঝতে না পারো",
+      "তুমি যদি কম সময়ে কাজের মতো ফলাফল চাও"
+    ],
+    "painsTitle": "তুমি কি এই সমস্যায় ভুগছো?",
+    "pains": [
+      "অনেক free content দেখে মাথা আরও বেশি confusing হয়ে যাচ্ছে",
+      "কী আগে শিখবে আর কী পরে শিখবে সেটা clear না",
+      "Action plan না থাকায় শুরু করলেও consistency থাকে না",
+      "ভুল resource follow করে সময় নষ্ট হচ্ছে"
+    ],
+    "beforeAfterTitle": "এই বই পড়ার আগে ও পরে",
+    "beforeAfter": [
+      {
+        "before": "এলোমেলো idea ও confusion",
+        "after": "clear roadmap ও priority"
+      },
+      {
+        "before": "শুরু করেও মাঝপথে থেমে যাওয়া",
+        "after": "ছোট ছোট step-এ consistent progress"
+      },
+      {
+        "before": "ভুল জায়গায় সময় নষ্ট",
+        "after": "যা দরকার শুধু সেটায় focus"
+      }
+    ],
+    "insideTitle": "এই বইয়ে তুমি যা পাবে",
+    "inside": [
+      {
+        "title": "Foundation",
+        "text": "শুরু করার আগে কোন জিনিসগুলো পরিষ্কার করা দরকার"
+      },
+      {
+        "title": "Roadmap",
+        "text": "কোন step আগে, কোন step পরে - সম্পূর্ণ sequence"
+      },
+      {
+        "title": "Execution",
+        "text": "প্রতিদিন কী করলে progress হবে তার practical guide"
+      }
+    ],
+    "authorName": "Sadhin / Rayshani",
+    "authorBio": "প্র্যাকটিক্যাল learning material, checklist এবং simple explanation দিয়ে beginner-friendly guide তৈরি করা হয়।",
+    "authorBadges": [
+      "Practical Guide",
+      "Bangla Content",
+      "Action Checklist"
+    ],
+    "ratingTitle": "৪.৯/৫ ⭐ — ৩,৫০০+ Reviews",
+    "testimonials": [
+      {
+        "name": "আরিফ হাসান",
+        "city": "ঢাকা",
+        "text": "এই বইটা পড়ার পর পুরো roadmap বুঝেছি।"
+      },
+      {
+        "name": "নুসরাত জাহান",
+        "city": "চট্টগ্রাম",
+        "text": "বাংলায় এত structured guide আশা করিনি।"
+      }
+    ],
+    "bonuses": [
+      {
+        "title": "Action Checklist",
+        "text": "প্রতিদিন follow করার ready checklist",
+        "value": 499
+      },
+      {
+        "title": "Worksheet Pack",
+        "text": "নিজের plan সাজানোর printable worksheet",
+        "value": 299
+      },
+      {
+        "title": "Mini Guide",
+        "text": "Common mistake এড়ানোর quick guide",
+        "value": 199
+      }
+    ],
+    "guaranteeTitle": "১৪ দিনের Money-Back Guarantee",
+    "guaranteeText": "যদি সন্তুষ্ট না হও, কোনো প্রশ্ন ছাড়াই পুরো টাকা ফেরত।",
+    "faqTitle": "কেনার আগে সাধারণ প্রশ্ন",
+    "faqs": [
+      {
+        "q": "এই বইটা কি আমার কাজে আসবে?",
+        "a": "তুমি যদি বাংলায় clear roadmap ও practical checklist চাও, তাহলে কাজে আসবে।"
+      },
+      {
+        "q": "eBook কীভাবে পাবো?",
+        "a": "পেমেন্ট verify হলে secure download link পাওয়া যাবে।"
+      }
+    ],
+    "finalHeadline": "এখনো ভাবছো? এই সুযোগ কিন্তু সীমিত সময়ের",
+    "finalText": "এই অফার শেষ হলে full price-এ কিনতে হবে।",
+    "footerText": "Support: WhatsApp + Email | Privacy Policy | Refund Policy",
+    "customSections": [],
+    "faviconUrl": "",
+    "seoImageUrl": "",
+    "seoTitle": "",
+    "seoDescription": "",
+    "seoKeywords": "",
+    "seoCanonical": ""
+  },
+  "products": [
+    {
+      "id": "aee38ca4-6c3b-46de-83b0-d2ad06e7bd49",
+      "title": "injin",
+      "type": "physical",
+      "price": 50,
+      "originalPrice": 62,
+      "description": "521653fzdr",
+      "stock": 21451,
+      "sku": "100",
+      "shippingCharge": 65265483,
+      "deliveryOptions": [
+        "Inside Dhaka",
+        "Outside Dhaka",
+        "Courier"
+      ],
+      "deliveryNote": "",
+      "imageUrl": "/uploads/1781602865713-1--we--1-.png",
+      "fileName": "",
+      "originalFileName": "",
+      "status": "active",
+      "createdAt": "2026-06-16T09:41:05.717Z",
+      "updatedAt": "2026-06-16T10:09:02.552Z"
+    },
+    {
+      "id": "48256784-5c03-4751-89e1-edc1907cd542",
+      "title": "Test Ebook",
+      "type": "ebook",
+      "price": 99,
+      "originalPrice": 199,
+      "description": "Testing product save",
+      "stock": null,
+      "sku": "",
+      "shippingCharge": 0,
+      "deliveryOptions": [
+        "Digital download"
+      ],
+      "deliveryNote": "",
+      "imageUrl": "",
+      "fileName": "",
+      "originalFileName": "",
+      "status": "archived",
+      "createdAt": "2026-06-16T09:39:58.103Z",
+      "updatedAt": "2026-06-16T09:41:37.458Z"
+    }
+  ]
+}
