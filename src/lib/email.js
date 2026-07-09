@@ -10,7 +10,43 @@ function createTransporter() {
   });
 }
 
-export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, downloadUrl }) {
+// Gmail rejects attachments over ~25MB; stay under with headroom for MIME encoding.
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+async function buildAttachment(attachment) {
+  if (!attachment?.url) return [];
+
+  try {
+    const response = await fetch(attachment.url);
+    if (!response.ok) {
+      console.warn(`Attachment fetch failed (${response.status}) — sending link only`);
+      return [];
+    }
+
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > MAX_ATTACHMENT_BYTES) {
+      console.warn("Ebook file too large to attach — sending link only");
+      return [];
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_ATTACHMENT_BYTES) {
+      console.warn("Ebook file too large to attach — sending link only");
+      return [];
+    }
+
+    return [{
+      filename: attachment.fileName || "ebook.pdf",
+      content: buffer,
+      contentType: "application/pdf"
+    }];
+  } catch (error) {
+    console.error("Could not fetch ebook file for attachment — sending link only:", error);
+    return [];
+  }
+}
+
+export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, downloadUrl, attachment }) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     console.warn("Email not configured — skipping delivery email");
     return;
@@ -22,6 +58,8 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
   }
 
   const transporter = createTransporter();
+  const attachments = await buildAttachment(attachment);
+  const hasAttachment = attachments.length > 0;
 
   const html = `
 <!DOCTYPE html>
@@ -48,7 +86,9 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
               <p style="margin:0 0 16px;color:#333;font-size:16px;">প্রিয় <strong>${customerName}</strong>,</p>
               <p style="margin:0 0 24px;color:#555;font-size:15px;line-height:1.6;">
                 আপনার পেমেন্ট যাচাই সম্পন্ন হয়েছে। ধন্যবাদ আমাদের পণ্য কেনার জন্য!<br/>
-                নিচের বাটনে ক্লিক করে আপনার ইবুক ডাউনলোড করুন:
+                ${hasAttachment
+                  ? "আপনার ইবুকটি (PDF) এই ইমেইলের সাথে সংযুক্ত করা হয়েছে। এছাড়াও নিচের বাটনে ক্লিক করে ডাউনলোড করতে পারবেন:"
+                  : "নিচের বাটনে ক্লিক করে আপনার ইবুক ডাউনলোড করুন:"}
               </p>
 
               <h2 style="margin:0 0 8px;color:#1a1a2e;font-size:18px;">📖 ${ebookTitle}</h2>
@@ -88,9 +128,10 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
   await transporter.sendMail({
     from: `"${ebookTitle}" <${process.env.GMAIL_USER}>`,
     to,
-    subject: `✅ আপনার ইবুক ডাউনলোডের লিংক — ${ebookTitle}`,
-    html
+    subject: `✅ আপনার ইবুক — ${ebookTitle}`,
+    html,
+    attachments
   });
 
-  console.log(`Delivery email sent to ${to}`);
+  console.log(`Delivery email sent to ${to}${hasAttachment ? " (with PDF attachment)" : " (link only)"}`);
 }

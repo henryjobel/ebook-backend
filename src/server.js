@@ -129,18 +129,52 @@ async function callUddoktaPay(path, payload) {
 }
 
 async function sendDeliveryForApprovedOrder(order, settings) {
-  if (!order.email) return;
+  if (!order.email) {
+    console.warn(`Order ${order.id} has no customer email — delivery email skipped`);
+    return;
+  }
+
   const downloadUrl = `${backendUrl}/api/download/${order.downloadToken}`;
-  sendEbookDeliveryEmail({
-    to: order.email,
-    customerName: order.name,
-    ebookTitle: settings.ebook.title || "ebook",
-    downloadUrl
-  }).catch((err) => console.error("Email send failed:", err));
+  let attachment = null;
+  try {
+    const downloadFile = await getDownloadFileSource(settings);
+    if (downloadFile?.filePublicId) {
+      attachment = {
+        fileName: downloadFileName(downloadFile),
+        url: getSignedFileUrl(downloadFile.filePublicId, downloadFile.fileFormat, downloadFile.fileResourceType)
+      };
+    }
+  } catch (error) {
+    console.error("Could not prepare ebook attachment:", error);
+  }
+
+  // Awaited on purpose: on serverless hosting (Vercel) the function freezes
+  // as soon as the response is sent, killing any fire-and-forget email.
+  try {
+    await sendEbookDeliveryEmail({
+      to: order.email,
+      customerName: order.name,
+      ebookTitle: settings.ebook.title || "ebook",
+      downloadUrl,
+      attachment
+    });
+  } catch (error) {
+    console.error("Email send failed:", error);
+  }
 }
 
 async function approveUddoktaPayOrder(order, paymentData) {
-  const wasAlreadyApproved = order.status === "approved";
+  // Atomically claim the approval so the webhook and the browser redirect
+  // (which can run concurrently) send the delivery email only once.
+  const claimed = await Order.findOneAndUpdate(
+    { _id: order.id, status: { $ne: "approved" } },
+    { $set: { status: "approved" } }
+  );
+
+  const paidEmail = String(paymentData.email || "").trim();
+  if (!order.email && paidEmail && !paidEmail.endsWith("@customer.local")) {
+    order.email = paidEmail;
+  }
   order.status = "approved";
   order.method = "uddoktapay";
   order.paymentGateway = "uddoktapay";
@@ -150,7 +184,7 @@ async function approveUddoktaPayOrder(order, paymentData) {
   order.downloadToken = order.downloadToken || createDownloadToken(order.id);
   await order.save();
 
-  if (!wasAlreadyApproved) {
+  if (claimed) {
     const settings = await getSettings();
     await sendDeliveryForApprovedOrder(order, settings);
   }
@@ -445,11 +479,13 @@ app.get("/api/orders/:id/payment-status", async (req, res) => {
     }
   }
 
+  const downloadReady = order.status === "approved" && Boolean(order.downloadToken);
   res.json({
     orderId: order.id,
     status: order.status,
     invoiceId: order.paymentInvoiceId,
-    downloadReady: Boolean(order.downloadToken)
+    downloadReady,
+    downloadUrl: downloadReady ? `${backendUrl}/api/download/${order.downloadToken}` : ""
   });
 });
 
@@ -733,15 +769,9 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   order.downloadToken = status === "approved" ? createDownloadToken(order.id) : "";
   await order.save();
 
-  if (status === "approved" && !wasAlreadyApproved && order.email) {
+  if (status === "approved" && !wasAlreadyApproved) {
     const settings = await getSettings();
-    const downloadUrl = `${backendUrl}/api/download/${order.downloadToken}`;
-    sendEbookDeliveryEmail({
-      to: order.email,
-      customerName: order.name,
-      ebookTitle: settings.ebook.title || "ইবুক",
-      downloadUrl
-    }).catch((err) => console.error("Email send failed:", err));
+    await sendDeliveryForApprovedOrder(order, settings);
   }
 
   res.json({ order });
@@ -772,21 +802,11 @@ app.get("/api/download/:token", async (req, res) => {
     downloadFile.fileResourceType
   );
 
-  const fileResponse = await fetch(signedUrl);
-  if (!fileResponse.ok || !fileResponse.body) {
-    return res.status(502).send("Download file unavailable");
-  }
-
-  const fileName = downloadFileName(downloadFile);
-  res.setHeader("Content-Type", fileResponse.headers.get("content-type") || "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  // Redirect to the short-lived signed Cloudinary URL instead of proxying the
+  // file: serverless hosting (Vercel) caps response bodies at ~4.5MB, which
+  // silently breaks downloads of any real-sized ebook.
   res.setHeader("Cache-Control", "private, no-store");
-
-  const contentLength = fileResponse.headers.get("content-length");
-  if (contentLength) res.setHeader("Content-Length", contentLength);
-
-  const fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
-  res.send(fileBuffer);
+  res.redirect(302, signedUrl);
 });
 
 connectDb().then(() => {

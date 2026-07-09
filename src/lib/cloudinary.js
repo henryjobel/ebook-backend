@@ -61,6 +61,7 @@ export function getSignedFileUrl(publicId, format, resourceType) {
   return cloudinary.utils.private_download_url(publicId, format, {
     resource_type: resourceType || "raw",
     type: "private",
+    attachment: true,
     expires_at: Math.floor(Date.now() / 1000) + 10 * 60
   });
 }

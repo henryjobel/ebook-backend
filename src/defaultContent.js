@@ -69,6 +69,9 @@ export const defaultContent = {
   customSections: [],
 
   v2: {
+    fontFamily: "Hind Siliguri, Inter, system-ui, sans-serif",
+    cta: { text: "এখনই অর্ডার করুন", href: "#pricing", showPrice: true },
+    videoSection: { enabled: false, title: "", description: "", url: "" },
     heroPill: "🔥 ২০২৬ সালের সবচেয়ে দরকারি গাইড",
     heroGuaranteeBadge: "৭ দিনের মানি-ব্যাক গ্যারান্টি",
     painsTitle: "তুমি কি এই সমস্যায় আছো?",
