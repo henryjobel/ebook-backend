@@ -34,9 +34,6 @@ const allowedOrigins = [...new Set([
   "http://127.0.0.1:5173",
   "http://127.0.0.1:3000"
 ])];
-const frontendUrl = process.env.FRONTEND_URL || "https://learnaiwithsadhin.xyz";
-const uddoktaPayBaseUrl = String(process.env.UDDOKTAPAY_BASE_URL || "").replace(/\/+$/, "");
-const uddoktaPayApiKey = process.env.UDDOKTAPAY_API_KEY || "";
 
 function isLocalDevOrigin(origin) {
   try {
@@ -92,42 +89,6 @@ function createDownloadToken(orderId) {
   });
 }
 
-function invoiceIdFromPaymentUrl(paymentUrl) {
-  try {
-    const url = new URL(paymentUrl);
-    const parts = url.pathname.split("/").filter(Boolean);
-    return parts[0] === "checkout" ? parts[1] || "" : "";
-  } catch {
-    const match = String(paymentUrl || "").match(/\/checkout\/([^/?#]+)/);
-    return match?.[1] || "";
-  }
-}
-
-function uddoktaPayHeaders() {
-  return {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "RT-UDDOKTAPAY-API-KEY": uddoktaPayApiKey
-  };
-}
-
-async function callUddoktaPay(path, payload) {
-  if (!uddoktaPayBaseUrl || !uddoktaPayApiKey) {
-    throw new Error("UddoktaPay credentials are not configured");
-  }
-
-  const response = await fetch(`${uddoktaPayBaseUrl}${path}`, {
-    method: "POST",
-    headers: uddoktaPayHeaders(),
-    body: JSON.stringify(payload)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.status === "ERROR") {
-    throw new Error(data.message || "UddoktaPay request failed");
-  }
-  return data;
-}
-
 async function sendDeliveryForApprovedOrder(order, settings) {
   if (!order.email) {
     console.warn(`Order ${order.id} has no customer email — delivery email skipped`);
@@ -161,52 +122,6 @@ async function sendDeliveryForApprovedOrder(order, settings) {
   } catch (error) {
     console.error("Email send failed:", error);
   }
-}
-
-async function approveUddoktaPayOrder(order, paymentData) {
-  // Atomically claim the approval so the webhook and the browser redirect
-  // (which can run concurrently) send the delivery email only once.
-  const claimed = await Order.findOneAndUpdate(
-    { _id: order.id, status: { $ne: "approved" } },
-    { $set: { status: "approved" } }
-  );
-
-  const paidEmail = String(paymentData.email || "").trim();
-  if (!order.email && paidEmail && !paidEmail.endsWith("@customer.local")) {
-    order.email = paidEmail;
-  }
-  order.status = "approved";
-  order.method = "uddoktapay";
-  order.paymentGateway = "uddoktapay";
-  order.paymentInvoiceId = paymentData.invoice_id || order.paymentInvoiceId;
-  order.transactionId = paymentData.transaction_id || order.transactionId || order.paymentInvoiceId;
-  order.paymentPayload = paymentData;
-  order.downloadToken = order.downloadToken || createDownloadToken(order.id);
-  await order.save();
-
-  if (claimed) {
-    const settings = await getSettings();
-    await sendDeliveryForApprovedOrder(order, settings);
-  }
-
-  return order;
-}
-
-async function refreshUddoktaPayOrder(order) {
-  if (!order.paymentInvoiceId) return order;
-  const paymentData = await callUddoktaPay("/api/verify-payment", { invoice_id: order.paymentInvoiceId });
-
-  if (paymentData.status === "COMPLETED") {
-    return approveUddoktaPayOrder(order, paymentData);
-  }
-
-  if (["ERROR", "CANCELED", "CANCELLED"].includes(paymentData.status)) {
-    order.status = "rejected";
-  }
-
-  order.paymentPayload = paymentData;
-  await order.save();
-  return order;
 }
 
 function inferFileFormat(source) {
@@ -328,70 +243,13 @@ app.get("/api/ebook", async (_req, res) => {
   });
 });
 
-app.post("/api/orders", async (req, res) => {
-  const { name, phone, email, amount, orderBump, items } = req.body;
-  if (!name || !phone) {
-    return res.status(400).json({ message: "Name and phone number are required" });
-  }
-
-  if (!uddoktaPayBaseUrl || !uddoktaPayApiKey) {
-    return res.status(500).json({ message: "UddoktaPay credentials are not configured" });
-  }
-
-  const settings = await getSettings();
-  const order = await Order.create({
-    name,
-    phone,
-    email: email || "",
-    method: "uddoktapay",
-    paymentGateway: "uddoktapay",
-    amount: Number(amount || settings.ebook.price),
-    orderBump: Boolean(orderBump),
-    paymentPayload: { items: Array.isArray(items) ? items : [] }
-  });
-
-  try {
-    const data = await callUddoktaPay("/api/checkout-v2", {
-      full_name: name,
-      email: email || `${String(phone).replace(/\D/g, "") || order.id}@customer.local`,
-      amount: String(order.amount),
-      metadata: {
-        order_id: order.id,
-        phone,
-        source: "learn-ai-with-sadhin"
-      },
-      redirect_url: `${backendUrl}/api/payments/uddoktapay/return`,
-      return_type: "GET",
-      cancel_url: `${frontendUrl}/payment-cancelled?order_id=${order.id}`,
-      webhook_url: `${backendUrl}/api/payments/uddoktapay/webhook`
-    });
-
-    if (!data.payment_url) {
-      order.status = "rejected";
-      order.paymentPayload = { ...order.paymentPayload, checkoutError: data };
-      await order.save();
-      return res.status(502).json({ message: data.message || "Could not start payment" });
-    }
-
-    order.paymentInvoiceId = data.invoice_id || invoiceIdFromPaymentUrl(data.payment_url);
-    order.paymentPayload = { ...order.paymentPayload, checkout: data };
-    await order.save();
-    res.status(201).json({ orderId: order.id, status: order.status, paymentUrl: data.payment_url });
-  } catch (error) {
-    order.status = "rejected";
-    order.paymentPayload = { ...order.paymentPayload, checkoutError: { message: error.message } };
-    await order.save();
-    res.status(502).json({ message: error.message || "Could not connect to UddoktaPay" });
-  }
-});
-
 app.post("/api/manual-orders", async (req, res) => {
-  const { name, phone, email, method, transactionId, amount, orderBump } = req.body;
-  if (!name || !phone || !method || !transactionId) {
-    return res.status(400).json({ message: "নাম, ফোন, পেমেন্ট মাধ্যম ও Transaction ID দিন" });
+  const { name, phone, email, method, transactionId, amount, orderBump, items } = req.body;
+  if (!name || !phone || !email || !transactionId) {
+    return res.status(400).json({ message: "নাম, ফোন, ইমেইল ও Transaction ID দিন" });
   }
 
-  if (!["bkash", "nagad"].includes(method)) {
+  if ((method || "bkash") !== "bkash") {
     return res.status(400).json({ message: "সঠিক পেমেন্ট মাধ্যম নির্বাচন করুন" });
   }
 
@@ -399,85 +257,20 @@ app.post("/api/manual-orders", async (req, res) => {
   const order = await Order.create({
     name,
     phone,
-    email: email || "",
-    method,
+    email,
+    method: "bkash",
     transactionId,
     amount: Number(amount || settings.ebook.price),
-    orderBump: Boolean(orderBump)
+    orderBump: Boolean(orderBump),
+    paymentPayload: { items: Array.isArray(items) ? items : [] }
   });
 
   res.status(201).json({ orderId: order.id, status: order.status });
 });
 
-app.all("/api/payments/uddoktapay/return", async (req, res) => {
-  const invoiceId = req.query.invoice_id || req.body?.invoice_id;
-  if (!invoiceId) {
-    return res.redirect(`${frontendUrl}/payment-failed?message=missing_invoice`);
-  }
-
-  try {
-    const paymentData = await callUddoktaPay("/api/verify-payment", { invoice_id: String(invoiceId) });
-    const orderId = paymentData.metadata?.order_id;
-    const order = orderId ? await Order.findById(orderId) : await Order.findOne({ paymentInvoiceId: String(invoiceId) });
-
-    if (!order) {
-      return res.redirect(`${frontendUrl}/payment-failed?invoice_id=${encodeURIComponent(String(invoiceId))}`);
-    }
-
-    order.paymentInvoiceId = String(invoiceId);
-    if (paymentData.status === "COMPLETED") {
-      await approveUddoktaPayOrder(order, paymentData);
-      return res.redirect(`${frontendUrl}/payment-success?order_id=${order.id}&invoice_id=${encodeURIComponent(String(invoiceId))}`);
-    }
-
-    if (["ERROR", "CANCELED", "CANCELLED"].includes(paymentData.status)) {
-      order.status = "rejected";
-    }
-    order.paymentPayload = paymentData;
-    await order.save();
-    const path = order.status === "rejected" ? "payment-failed" : "payment-pending";
-    return res.redirect(`${frontendUrl}/${path}?order_id=${order.id}&invoice_id=${encodeURIComponent(String(invoiceId))}`);
-  } catch (error) {
-    return res.redirect(`${frontendUrl}/payment-failed?message=${encodeURIComponent(error.message || "verify_failed")}`);
-  }
-});
-
-app.post("/api/payments/uddoktapay/webhook", async (req, res) => {
-  const invoiceId = req.body?.invoice_id;
-  if (!invoiceId) return res.status(400).json({ message: "invoice_id is required" });
-
-  try {
-    const paymentData = await callUddoktaPay("/api/verify-payment", { invoice_id: String(invoiceId) });
-    const orderId = paymentData.metadata?.order_id || req.body?.metadata?.order_id;
-    const order = orderId ? await Order.findById(orderId) : await Order.findOne({ paymentInvoiceId: String(invoiceId) });
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    order.paymentInvoiceId = String(invoiceId);
-    if (paymentData.status === "COMPLETED") {
-      await approveUddoktaPayOrder(order, paymentData);
-    } else {
-      if (["ERROR", "CANCELED", "CANCELLED"].includes(paymentData.status)) order.status = "rejected";
-      order.paymentPayload = paymentData;
-      await order.save();
-    }
-
-    res.json({ ok: true, orderId: order.id, status: order.status });
-  } catch (error) {
-    res.status(502).json({ message: error.message || "Webhook verification failed" });
-  }
-});
-
 app.get("/api/orders/:id/payment-status", async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
-
-  if (order.paymentGateway === "uddoktapay" && order.paymentInvoiceId && order.status !== "approved") {
-    try {
-      await refreshUddoktaPayOrder(order);
-    } catch (error) {
-      console.error("UddoktaPay status refresh failed:", error);
-    }
-  }
 
   const downloadReady = order.status === "approved" && Boolean(order.downloadToken);
   res.json({
