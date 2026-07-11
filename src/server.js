@@ -311,6 +311,12 @@ app.get("/api/admin/orders", requireAdmin, async (_req, res) => {
   res.json({ orders });
 });
 
+app.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
+  const order = await Order.findByIdAndDelete(req.params.id);
+  if (!order) return res.status(404).json({ message: "Order not found" });
+  res.json({ deleted: true, orderId: req.params.id });
+});
+
 app.get("/api/admin/products", requireAdmin, async (_req, res) => {
   const products = await Product.find().sort({ createdAt: -1 });
   res.json({ products });
