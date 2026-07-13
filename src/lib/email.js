@@ -46,7 +46,39 @@ async function buildAttachment(attachment) {
   }
 }
 
-export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, downloadUrl, attachment }) {
+function buildUpsellHtml(upsellItems) {
+  if (!upsellItems?.length) return "";
+
+  const rows = upsellItems.map((item) => `
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #eee;color:#333;font-size:14px;">
+                    ${item.title}
+                  </td>
+                  <td style="padding:12px 16px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+                    ${item.downloadUrl
+                      ? `<a href="${item.downloadUrl}" style="display:inline-block;background:#1a1a2e;color:#ffffff;text-decoration:none;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:bold;">ডাউনলোড করুন</a>`
+                      : `<span style="color:#888;font-size:12px;">শীঘ্রই আলাদাভাবে পাঠানো হবে</span>`}
+                  </td>
+                </tr>`).join("");
+
+  return `
+              <h3 style="margin:28px 0 8px;color:#1a1a2e;font-size:16px;">🎁 আপনার অর্ডারের অতিরিক্ত প্রোডাক্ট</h3>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eee;border-radius:8px;border-collapse:separate;overflow:hidden;">
+                ${rows}
+              </table>`;
+}
+
+function buildUpsellText(upsellItems) {
+  if (!upsellItems?.length) return "";
+  const lines = upsellItems.map((item) =>
+    item.downloadUrl
+      ? `- ${item.title}: ${item.downloadUrl}`
+      : `- ${item.title}: শীঘ্রই আলাদাভাবে পাঠানো হবে`
+  );
+  return `\nআপনার অর্ডারের অতিরিক্ত প্রোডাক্ট:\n${lines.join("\n")}\n`;
+}
+
+export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, brandName, downloadUrl, attachment, upsellItems = [] }) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     console.warn("Email not configured — skipping delivery email");
     return;
@@ -60,6 +92,7 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
   const transporter = createTransporter();
   const attachments = await buildAttachment(attachment);
   const hasAttachment = attachments.length > 0;
+  const senderName = brandName || ebookTitle || "Ebook Store";
 
   const html = `
 <!DOCTYPE html>
@@ -77,7 +110,7 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
 
           <tr>
             <td style="background:#1a1a2e;padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:24px;letter-spacing:0.5px;">🎉 আপনার অর্ডার অনুমোদিত হয়েছে!</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:24px;letter-spacing:0.5px;">আপনার অর্ডার অনুমোদিত হয়েছে</h1>
             </td>
           </tr>
 
@@ -99,12 +132,13 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
                   ডাউনলোড করুন →
                 </a>
               </div>
+              ${buildUpsellHtml(upsellItems)}
 
-              <p style="margin:0 0 8px;color:#888;font-size:13px;">
-                ⏳ এই লিংকটি <strong>৭ দিন</strong> পর্যন্ত কার্যকর থাকবে।
+              <p style="margin:24px 0 8px;color:#888;font-size:13px;">
+                ⏳ ডাউনলোড লিংকগুলো <strong>৭ দিন</strong> পর্যন্ত কার্যকর থাকবে।
               </p>
               <p style="margin:0;color:#888;font-size:13px;">
-                কোনো সমস্যা হলে এই ইমেইলটি রিপ্লাই করুন।
+                কোনো সমস্যা হলে এই ইমেইলটি রিপ্লাই করুন — আমরা সাহায্য করব।
               </p>
             </td>
           </tr>
@@ -112,7 +146,7 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
           <tr>
             <td style="background:#f9f9f9;padding:20px 40px;border-top:1px solid #eee;text-align:center;">
               <p style="margin:0;color:#aaa;font-size:12px;">
-                এই ইমেইল স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে। অনুগ্রহ করে সরাসরি উত্তর দেবেন না।
+                ${senderName} — আপনার অর্ডারের ডেলিভারি ইমেইল।
               </p>
             </td>
           </tr>
@@ -125,13 +159,30 @@ export async function sendEbookDeliveryEmail({ to, customerName, ebookTitle, dow
 </html>
   `.trim();
 
+  // A plain-text alternative significantly lowers the spam score of HTML-only mail.
+  const text = [
+    `প্রিয় ${customerName},`,
+    "",
+    "আপনার পেমেন্ট যাচাই সম্পন্ন হয়েছে। ধন্যবাদ আমাদের পণ্য কেনার জন্য!",
+    "",
+    `ইবুক: ${ebookTitle}`,
+    `ডাউনলোড লিংক: ${downloadUrl}`,
+    buildUpsellText(upsellItems),
+    "ডাউনলোড লিংকগুলো ৭ দিন পর্যন্ত কার্যকর থাকবে।",
+    "কোনো সমস্যা হলে এই ইমেইলটি রিপ্লাই করুন।",
+    "",
+    `— ${senderName}`
+  ].join("\n");
+
   await transporter.sendMail({
-    from: `"${ebookTitle}" <${process.env.GMAIL_USER}>`,
+    from: `"${senderName}" <${process.env.GMAIL_USER}>`,
     to,
-    subject: `✅ আপনার ইবুক — ${ebookTitle}`,
+    replyTo: process.env.SUPPORT_EMAIL || process.env.GMAIL_USER,
+    subject: `আপনার ইবুক ডাউনলোড করুন — ${ebookTitle}`,
+    text,
     html,
     attachments
   });
 
-  console.log(`Delivery email sent to ${to}${hasAttachment ? " (with PDF attachment)" : " (link only)"}`);
+  console.log(`Delivery email sent to ${to}${hasAttachment ? " (with PDF attachment)" : " (link only)"}${upsellItems.length ? ` (+${upsellItems.length} upsell)` : ""}`);
 }

@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
+import { isValidObjectId } from "mongoose";
 import multer from "multer";
 
 import { connectDb, getDbStatus } from "./db.js";
@@ -83,10 +84,72 @@ function requireAdmin(req, res, next) {
   }
 }
 
-function createDownloadToken(orderId) {
-  return jwt.sign({ orderId, purpose: "download" }, jwtSecret, {
+function createDownloadToken(orderId, upsellId = "") {
+  const payload = { orderId, purpose: "download" };
+  if (upsellId) payload.upsellId = String(upsellId);
+  return jwt.sign(payload, jwtSecret, {
     expiresIn: "7d"
   });
+}
+
+async function collectPurchasedUpsells(order, settings) {
+  const items = Array.isArray(order.paymentPayload?.items) ? order.paymentPayload.items : [];
+  const cmsUpsells = mergeContent(settings.content).v2?.upsells || [];
+  const upsellItems = [];
+
+  for (const item of items) {
+    const itemId = String(item?.id || "");
+    if (!itemId || itemId === "main-ebook") continue;
+
+    const cmsUpsell = cmsUpsells.find((upsell) => String(upsell.id) === itemId);
+    if (cmsUpsell) {
+      upsellItems.push({
+        title: cmsUpsell.title || item.title || "অতিরিক্ত প্রোডাক্ট",
+        downloadUrl: cmsUpsell.filePublicId
+          ? `${backendUrl}/api/download/${createDownloadToken(order.id, itemId)}`
+          : ""
+      });
+      continue;
+    }
+
+    if (!isValidObjectId(itemId)) continue;
+    const product = await Product.findById(itemId);
+    // Skip the main product — its file is already the primary delivery.
+    if (!product || !product.isUpsell) continue;
+    upsellItems.push({
+      title: product.title || item.title || "অতিরিক্ত প্রোডাক্ট",
+      downloadUrl: product.filePublicId
+        ? `${backendUrl}/api/download/${createDownloadToken(order.id, itemId)}`
+        : ""
+    });
+  }
+
+  return upsellItems;
+}
+
+async function resolveUpsellFileSource(settings, upsellId) {
+  const cmsUpsell = (mergeContent(settings.content).v2?.upsells || [])
+    .find((item) => String(item.id) === String(upsellId));
+  if (cmsUpsell?.filePublicId) {
+    return {
+      title: cmsUpsell.title,
+      filePublicId: cmsUpsell.filePublicId,
+      fileFormat: inferFileFormat(cmsUpsell),
+      fileResourceType: cmsUpsell.fileResourceType,
+      originalFileName: cmsUpsell.originalFileName
+    };
+  }
+
+  if (!isValidObjectId(upsellId)) return null;
+  const product = await Product.findById(upsellId);
+  if (!product?.filePublicId) return null;
+  return {
+    title: product.title,
+    filePublicId: product.filePublicId,
+    fileFormat: inferFileFormat(product),
+    fileResourceType: product.fileResourceType,
+    originalFileName: product.originalFileName
+  };
 }
 
 async function sendDeliveryForApprovedOrder(order, settings) {
@@ -95,6 +158,7 @@ async function sendDeliveryForApprovedOrder(order, settings) {
     return;
   }
 
+  const content = mergeContent(settings.content);
   const downloadUrl = `${backendUrl}/api/download/${order.downloadToken}`;
   let attachment = null;
   try {
@@ -109,6 +173,13 @@ async function sendDeliveryForApprovedOrder(order, settings) {
     console.error("Could not prepare ebook attachment:", error);
   }
 
+  let upsellItems = [];
+  try {
+    upsellItems = await collectPurchasedUpsells(order, settings);
+  } catch (error) {
+    console.error("Could not prepare upsell delivery items:", error);
+  }
+
   // Awaited on purpose: on serverless hosting (Vercel) the function freezes
   // as soon as the response is sent, killing any fire-and-forget email.
   try {
@@ -116,8 +187,10 @@ async function sendDeliveryForApprovedOrder(order, settings) {
       to: order.email,
       customerName: order.name,
       ebookTitle: settings.ebook.title || "ebook",
+      brandName: content.v2?.brandName || content.brandName || "",
       downloadUrl,
-      attachment
+      attachment,
+      upsellItems
     });
   } catch (error) {
     console.error("Email send failed:", error);
@@ -234,12 +307,28 @@ app.get("/", (_req, res) => {
 </html>`);
 });
 
+function publicContent(content) {
+  const safe = { ...content };
+  if (safe.v2?.upsells) {
+    safe.v2 = {
+      ...safe.v2,
+      upsells: safe.v2.upsells.map(({ filePublicId, fileFormat, fileResourceType, ...rest }) => ({
+        ...rest,
+        hasFile: Boolean(filePublicId)
+      }))
+    };
+  }
+  return safe;
+}
+
 app.get("/api/ebook", async (_req, res) => {
   const settings = await getSettings();
+  // Never let a CDN or the browser serve a stale copy after the admin edits content.
+  res.setHeader("Cache-Control", "no-store");
   res.json({
     ebook: publicEbook(settings.ebook),
     payment: settings.payment,
-    content: mergeContent(settings.content)
+    content: publicContent(mergeContent(settings.content))
   });
 });
 
@@ -303,6 +392,7 @@ app.post("/api/admin/login", async (req, res) => {
 
 app.get("/api/products", async (_req, res) => {
   const products = await Product.find({ status: "active" }).sort({ createdAt: -1 });
+  res.setHeader("Cache-Control", "no-store");
   res.json({ products });
 });
 
@@ -460,7 +550,13 @@ app.put("/api/admin/settings", requireAdmin, upload.fields([
   { name: "v2VideoTestimonialImage2", maxCount: 1 },
   { name: "v2VideoTestimonialImage3", maxCount: 1 },
   { name: "v2VideoTestimonialImage4", maxCount: 1 },
-  { name: "v2VideoTestimonialImage5", maxCount: 1 }
+  { name: "v2VideoTestimonialImage5", maxCount: 1 },
+  { name: "upsellFile0", maxCount: 1 },
+  { name: "upsellFile1", maxCount: 1 },
+  { name: "upsellFile2", maxCount: 1 },
+  { name: "upsellFile3", maxCount: 1 },
+  { name: "upsellFile4", maxCount: 1 },
+  { name: "upsellFile5", maxCount: 1 }
 ]), async (req, res) => {
   const settings = await getSettings();
   const { title, subtitle, description, price, originalPrice, bkashNumber, nagadNumber, instructions, contentJson } = req.body;
@@ -497,7 +593,12 @@ app.put("/api/admin/settings", requireAdmin, upload.fields([
   }
 
   const logoUrl = await uploadIfPresent(req, "logoImage");
-  if (logoUrl) content.logoUrl = logoUrl;
+  if (logoUrl) {
+    content.logoUrl = logoUrl;
+    // The storefront header prefers v2.logoUrl, so a stale value there would
+    // keep showing the old logo after reload — always update both.
+    content.v2.logoUrl = logoUrl;
+  }
 
   const faviconUrl = await uploadIfPresent(req, "faviconImage");
   if (faviconUrl) content.faviconUrl = faviconUrl;
@@ -530,6 +631,20 @@ app.put("/api/admin/settings", requireAdmin, upload.fields([
 
   const v2AuthorPhotoUrl = await uploadIfPresent(req, "v2AuthorImage");
   if (v2AuthorPhotoUrl) content.v2.author.photoUrl = v2AuthorPhotoUrl;
+
+  for (let index = 0; index < 6; index += 1) {
+    const upsellFile = req.files?.[`upsellFile${index}`]?.[0];
+    if (upsellFile && content.v2.upsells?.[index]) {
+      const uploaded = await uploadPrivateFile(upsellFile.buffer, "ebook-store/upsell-files", upsellFile.originalname);
+      content.v2.upsells[index] = {
+        ...content.v2.upsells[index],
+        filePublicId: uploaded.publicId,
+        fileFormat: uploaded.format,
+        fileResourceType: uploaded.resourceType,
+        originalFileName: upsellFile.originalname
+      };
+    }
+  }
 
   for (let index = 0; index < 6; index += 1) {
     const url = await uploadIfPresent(req, `v2VideoTestimonialImage${index}`);
@@ -590,7 +705,9 @@ app.get("/api/download/:token", async (req, res) => {
 
   const order = await Order.findById(payload.orderId);
   const settings = await getSettings();
-  const downloadFile = await getDownloadFileSource(settings);
+  const downloadFile = payload.upsellId
+    ? await resolveUpsellFileSource(settings, payload.upsellId)
+    : await getDownloadFileSource(settings);
   if (!order || order.status !== "approved" || !downloadFile?.filePublicId) {
     return res.status(403).send("Download not available");
   }
