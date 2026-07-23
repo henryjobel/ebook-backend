@@ -161,8 +161,9 @@ async function sendDeliveryForApprovedOrder(order, settings) {
   const content = mergeContent(settings.content);
   const downloadUrl = `${backendUrl}/api/download/${order.downloadToken}`;
   let attachment = null;
+  let downloadFile = null;
   try {
-    const downloadFile = await getDownloadFileSource(settings);
+    downloadFile = await getDownloadFileSource(settings, order);
     if (downloadFile?.filePublicId) {
       attachment = {
         fileName: downloadFileName(downloadFile),
@@ -186,7 +187,7 @@ async function sendDeliveryForApprovedOrder(order, settings) {
     await sendEbookDeliveryEmail({
       to: order.email,
       customerName: order.name,
-      ebookTitle: settings.ebook.title || "ebook",
+      ebookTitle: downloadFile?.title || settings.ebook.title || "ebook",
       brandName: content.v2?.brandName || content.brandName || "",
       downloadUrl,
       attachment,
@@ -213,15 +214,39 @@ function downloadFileName(source) {
     .trim() || "ebook.pdf";
 }
 
-async function getDownloadFileSource(settings) {
+function fileSource(source) {
+  if (!source?.filePublicId) return null;
+  return {
+    title: source.title,
+    filePublicId: source.filePublicId,
+    fileFormat: inferFileFormat(source),
+    fileResourceType: source.fileResourceType,
+    originalFileName: source.originalFileName
+  };
+}
+
+async function getDownloadFileSource(settings, order = null) {
+  // Checkout stores the purchased main product as the first order item.
+  // Resolve that product first so replacing its PDF in Edit Product also
+  // replaces the file delivered by both email and the secure download link.
+  const purchasedItems = Array.isArray(order?.paymentPayload?.items)
+    ? order.paymentPayload.items
+    : [];
+  const purchasedProductId = String(purchasedItems[0]?.id || "");
+
+  if (isValidObjectId(purchasedProductId)) {
+    const purchasedProduct = await Product.findOne({
+      _id: purchasedProductId,
+      type: "ebook",
+      isUpsell: { $ne: true },
+      filePublicId: { $ne: "" }
+    });
+    const purchasedFile = fileSource(purchasedProduct);
+    if (purchasedFile) return purchasedFile;
+  }
+
   if (settings.ebook.filePublicId) {
-    return {
-      title: settings.ebook.title,
-      filePublicId: settings.ebook.filePublicId,
-      fileFormat: inferFileFormat(settings.ebook),
-      fileResourceType: settings.ebook.fileResourceType,
-      originalFileName: settings.ebook.originalFileName
-    };
+    return fileSource(settings.ebook);
   }
 
   const ebookProduct = await Product.findOne({
@@ -230,14 +255,7 @@ async function getDownloadFileSource(settings) {
     filePublicId: { $ne: "" }
   }).sort({ createdAt: -1 });
 
-  if (!ebookProduct) return null;
-  return {
-    title: ebookProduct.title,
-    filePublicId: ebookProduct.filePublicId,
-    fileFormat: inferFileFormat(ebookProduct),
-    fileResourceType: ebookProduct.fileResourceType,
-    originalFileName: ebookProduct.originalFileName
-  };
+  return fileSource(ebookProduct);
 }
 
 async function uploadIfPresent(req, fieldName) {
@@ -707,7 +725,7 @@ app.get("/api/download/:token", async (req, res) => {
   const settings = await getSettings();
   const downloadFile = payload.upsellId
     ? await resolveUpsellFileSource(settings, payload.upsellId)
-    : await getDownloadFileSource(settings);
+    : await getDownloadFileSource(settings, order);
   if (!order || order.status !== "approved" || !downloadFile?.filePublicId) {
     return res.status(403).send("Download not available");
   }

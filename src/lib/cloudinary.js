@@ -42,6 +42,8 @@ export function uploadPrivateFile(buffer, folder, originalName) {
         resource_type: "raw",
         type: "private",
         use_filename: true,
+        unique_filename: true,
+        overwrite: false,
         filename_override: originalName
       },
       (error, result) => {
